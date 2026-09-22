@@ -60,7 +60,7 @@ def main():
         return
 
     soup = BeautifulSoup(response.text, "html.parser")
-    
+    print(f"Page Title found: {soup.title.string if soup.title else 'No title'}")
     meta_desc = soup.find("meta", property="og:description")
     meta_image = soup.find("meta", property="og:image")
     
