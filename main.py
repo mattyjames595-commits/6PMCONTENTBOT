@@ -10,7 +10,7 @@ PAGE_URL = f"https://vxtwitter.com/{TARGET_HANDLE}"
 # Pulls the webhook securely from GitHub Actions Secrets
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
 
-KEYWORDS = ["ea sports", "direct", "update"]  # Customize your lowercase keywords here
+KEYWORDS = ["6pm"]  # Customize your lowercase keywords here
 LAST_SEEN_FILE = "last_seen.json"
 
 def load_last_seen():
