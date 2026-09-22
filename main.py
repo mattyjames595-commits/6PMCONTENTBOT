@@ -1,11 +1,12 @@
 import requests
 import json
 import os
+from bs4 import BeautifulSoup
 
 # --- CONFIGURATION ---
 TARGET_HANDLE = "futdonk"
-# Public FxTwitter API endpoint for user data and recent tweets
-API_URL = f"https://api.fxtwitter.com/{TARGET_HANDLE}"
+# Using a clean public RSS bridge that exposes recent timeline items
+FEED_URL = f"https://nitter.poast.org/{TARGET_HANDLE}/rss"
 
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
 
@@ -25,7 +26,7 @@ def save_last_seen(seen_list):
     with open(LAST_SEEN_FILE, "w") as f:
         json.dump(seen_list[-50:], f)
 
-def send_to_discord(tweet_text, tweet_link, media_url):
+def send_to_discord(tweet_text, tweet_link):
     embed = {
         "title": f"New @{TARGET_HANDLE} Post Match",
         "description": tweet_text,
@@ -35,9 +36,6 @@ def send_to_discord(tweet_text, tweet_link, media_url):
             {"name": "Original Post", "value": f"[View on X]({tweet_link})", "inline": False}
         ]
     }
-    
-    if media_url:
-        embed["image"] = {"url": media_url}
 
     payload = {"embeds": [embed]}
     response = requests.post(DISCORD_WEBHOOK_URL, json=payload)
@@ -48,54 +46,44 @@ def send_to_discord(tweet_text, tweet_link, media_url):
         print(f"Failed to post to Discord. Status code: {response.status_code}")
 
 def main():
-    print(f"Fetching timeline for @{TARGET_HANDLE}...")
-    last_seen = load_last_seen()
+    print(f"Fetching feed for @{TARGET_HANDLE}...")
+    last_seen = load_last_setup = load_last_seen()
     
     headers = {"User-Agent": "Mozilla/5.0"}
-    response = requests.get(API_URL, headers=headers)
+    response = requests.get(FEED_URL, headers=headers)
     
     if response.status_code != 200:
-        print(f"Failed to fetch profile API. Status code: {response.status_code}")
+        print(f"Failed to fetch feed. Status code: {response.status_code}")
         return
 
-    data = response.json()
+    # Parse XML feed layout
+    soup = BeautifulSoup(response.text, "xml")
+    items = soup.find_all("item")
     
-    # Safely extract tweets from API response structure
-    tweets = []
-    if "tweets" in data:
-        tweets = data["tweets"]
-    elif "user" in data and "tweets" in data["user"]:
-        tweets = data["user"]["tweets"]
-    elif "tweet" in data:
-        tweets = [data["tweet"]]
-
-    if not tweets:
-        # Fallback if structural layout is purely user profile metadata
-        print("No active timeline items found in payload.")
+    if not items:
+        print("No items found in feed.")
         return
 
     new_seen = list(last_seen)
     found_new = False
 
-    for tweet in reversed(tweets):
-        tweet_id = str(tweet.get("id"))
+    for item in reversed(items):
+        title_tag = item.find("title")
+        link_tag = item.find("link")
+        guid_tag = item.find("guid")
+        
+        tweet_text = title_tag.text if title_tag else ""
+        tweet_link = link_tag.text if link_tag else f"https://twitter.com/{TARGET_HANDLE}"
+        # Fallback unique identifier based on link or GUID
+        tweet_id = guid_tag.text if guid_tag else tweet_link
         
         if tweet_id in last_seen:
             continue
             
-        tweet_text = tweet.get("text", "")
-        tweet_link = tweet.get("url", f"https://twitter.com/{TARGET_HANDLE}")
-        
-        media_url = None
-        media = tweet.get("media", {})
-        photos = media.get("photos", [])
-        if photos:
-            media_url = photos[0].get("url")
-
         full_text = tweet_text.lower()
         if any(kw.lower() in full_text for kw in KEYWORDS):
             print(f"Match found! Sending to Discord: {tweet_text[:40]}...")
-            send_to_discord(tweet_text, tweet_link, media_url)
+            send_to_discord(tweet_text, tweet_link)
         else:
             print(f"Skipped (no keyword match): {tweet_text[:40]}...")
             
