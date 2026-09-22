@@ -1,0 +1,1 @@
+# eadirect-discord-bot
