@@ -4,7 +4,7 @@ import os
 from bs4 import BeautifulSoup
 
 # --- CONFIGURATION ---
-TARGET_HANDLE = "Futdonk"
+TARGET_HANDLE = "futdonk"
 PAGE_URL = f"https://vxtwitter.com/{TARGET_HANDLE}"
 
 # Pulls the webhook securely from GitHub Actions Secrets
