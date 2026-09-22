@@ -6,9 +6,10 @@ import os
 TARGET_HANDLE = "futdonk"
 API_URL = f"https://api.fxtwitter.com/{TARGET_HANDLE}"
 
+# Pulls the webhook securely from GitHub Actions Secrets
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
 
-KEYWORDS = ["ea sports", "direct", "update", "fut", "toty", "tots", "sbc"]  # Customize keywords (lowercase)
+KEYWORDS = ["6pm"]  # Customize your lowercase keywords here
 LAST_SEEN_FILE = "last_seen.json"
 
 def load_last_seen():
@@ -47,39 +48,33 @@ def send_to_discord(tweet_text, tweet_link, media_url):
         print(f"Failed to post to Discord. Status code: {response.status_code}")
 
 def main():
-    print(f"Fetching profile data for @{TARGET_HANDLE}...")
+    print(f"Fetching timeline for @{TARGET_HANDLE} via API...")
     last_seen = load_last_seen()
     
     headers = {"User-Agent": "Mozilla/5.0"}
     response = requests.get(API_URL, headers=headers)
     
     if response.status_code != 200:
-        print(f"Failed to fetch profile API. Status code: {response.status_code}")
+        print(f"Failed to fetch profile data. Status code: {response.status_code}")
         return
 
     data = response.json()
     
-    # Debug print to confirm API connection
-    print(f"API Response keys received: {list(data.keys())}")
-
-    # FxTwitter nests timelines under different keys depending on profile layout
-    tweet_container = data.get("tweets", [])
-    if not tweet_container and "user" in data:
-        # Some profile queries return user details; check for pinned or timeline fallback
-        tweet_container = data.get("user", {}).get("tweets", [])
-
-    # If it's a single tweet dictionary fallback
-    if not tweet_container and "tweet" in data:
-        tweet_container = [data["tweet"]]
-
-    if not tweet_container:
-        print("Timeline array is empty or restricted for this handle.")
+    # Extract tweets from the API response structure
+    tweets = []
+    if "tweets" in data:
+        tweets = data["tweets"]
+    elif "tweet" in data:
+        tweets = [data["tweet"]]
+    
+    if not tweets:
+        print("No tweets found in response.")
         return
 
     new_seen = list(last_seen)
     found_new = False
 
-    for tweet in reversed(tweet_container):
+    for tweet in reversed(tweets):
         tweet_id = str(tweet.get("id"))
         
         if tweet_id in last_seen:
@@ -88,12 +83,14 @@ def main():
         tweet_text = tweet.get("text", "")
         tweet_link = tweet.get("url", f"https://twitter.com/{TARGET_HANDLE}")
         
+        # Extract media photo if available
         media_url = None
         media = tweet.get("media", {})
         photos = media.get("photos", [])
         if photos:
             media_url = photos[0].get("url")
 
+        # Check keyword filter
         full_text = tweet_text.lower()
         if any(kw.lower() in full_text for kw in KEYWORDS):
             print(f"Match found! Sending to Discord: {tweet_text[:40]}...")
