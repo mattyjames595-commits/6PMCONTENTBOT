@@ -1,1 +1,1 @@
-# eadirect-discord-bot
+# 6pm content bot
